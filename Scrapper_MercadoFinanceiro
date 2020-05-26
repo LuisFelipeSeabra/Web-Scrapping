@@ -1,0 +1,194 @@
+import time
+import pandas as pd
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import re
+import numpy as np
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
+
+option = Options()
+option.headless = True
+driver = webdriver.Chrome()
+#options=option
+
+
+def conectar(acao):
+    url = "https://statusinvest.com.br/acoes/%s" % (acao[i])
+    ''' driver = webdriver.Chrome(options = option)-> executado em background'''
+    driver.get(url)
+    time.sleep(4)
+
+def scroll(element):
+    driver.execute_script("return arguments[0].scrollIntoView();", element)
+    driver.execute_script("window.scrollBy(0, -150);")
+    time.sleep(4)
+
+def encontrarElementoXpathOutHtml(elementoFunc):
+    # driver.find_element_by_xpath("//div[@class= 'top-info m-0 width-auto text-left info-5 sm d-flex justify-between ov-hidden']/")
+    element = driver.find_element_by_xpath(elementoFunc)
+    html_content = element.get_attribute('outerHTML')
+    return html_content
+def encontrarAllElementsParaPreencherDf(soup, value):
+    values = soup.find_all(class_=[value])
+    return values
+def encontrarAllElementsParaPreencherDf_resultado(soup, value):
+    values = soup.find_all(class_=re.compile(value))
+    return values
+def encontrarAllElementsComecandoParaEstruturarDf(soup, elemento):
+    tit_values = []
+    tit_values = soup.find_all(class_=re.compile(elemento))
+    return tit_values
+
+def encontrarAllElementsComecandoParaEstruturarDf_resultado(soup_resultado, elemento):
+    tit_values = []
+    tit_values = soup_resultado.find_all(class_=re.compile(elemento))
+    return tit_values
+
+
+def estruturarDF(i,tit_values):
+    if i == 0:
+        # colunas
+        colunas = []
+        for col in tit_values:
+            colunas.append(col.get_text())
+
+        df = pd.DataFrame(columns=colunas)
+        del df['Dívida Líq. / Patrimônio']
+        del df['Dívida Líquida / Patrimônio']
+        del df['Dívida Líquida / EBITDA']
+        del df['Dívida Líquida / EBIT']
+        del df['Patrimônio / Ativos']
+    return df
+
+def estruturarDF_resultado(i,tit_values):
+    if i == 0:
+        # colunas
+        colunas = []
+        for col in tit_values:
+            colunas.append(col.get_text())
+
+        df = pd.DataFrame(columns=colunas)
+    return df
+
+def preencherDF(values):
+    # linhas/valores
+    valores = []
+    for row in values:
+        valores.append(row.get_text())
+
+    # adicionando as linhas ao df
+    df.loc[i] = valores
+    return df
+
+def exportarCsv (df,nome):
+    df.to_csv(nome, sep=';')
+
+qtd = int(input('quantas ações: '))
+papeis = []
+for i in range(qtd):
+    p = str(input('Digite o nome das ações: '))
+    papeis.append(p)
+
+
+df = pd.DataFrame()
+df_resultado = pd.DataFrame()
+df_fluxo = pd.DataFrame()
+df_balanco = pd.DataFrame()
+#papeis = ['egie3','flry3']
+acao = np.asarray(papeis)
+
+for i in range(acao.size):
+    print(i)
+
+    # ------------------------------------------Conexão:------------------------------------------
+    conectar(acao)
+
+    # ------------------------------------------encontrar elemento Resultado -------------------------------------
+    element = driver.find_element_by_xpath("//div[@class = 'DRE table-info card card-panel white mb-5']//i[text()='arrow_drop_down']")
+    scroll(element)
+    driver.find_element_by_xpath("//div[@class = 'DRE table-info card card-panel white mb-5']//i[text()='arrow_drop_down']").click()
+    #wait.until(EC.presence_of_element_located((By.XPATH, '//ul[@id ="dropdown-dre-grid"]')))
+    time.sleep(4)
+    element = driver.find_element_by_xpath("//div[@class = 'DRE table-info card card-panel white mb-5']//a[@data-type = '1']")
+    scroll(element)
+    driver.find_element_by_xpath("//div[@class = 'DRE table-info card card-panel white mb-5']//a[@data-type = '1']").click()
+    #driver.find_element_by_xpath("//div[@id = 'contabil-section']//*[text() = 'TRIMESTRAL']").click()
+    time.sleep(4)
+    driver.find_element_by_xpath("//div[@id = 'contabil-section']//div[@class = 'DRE table-info card card-panel white mb-5']//div[@class ='select-wrapper']//input[@class = 'select-dropdown dropdown-trigger']").click()
+    time.sleep(4)
+    driver.find_element_by_xpath("//div[@id = 'contabil-section']//div[@class = 'DRE table-info card card-panel white mb-5']//div[@class = 'select-wrapper']//*[text()='AH']").click()
+    driver.find_element_by_xpath("//div[@id = 'contabil-section']//*[text() = '2010']//../..").click()
+    time.sleep(4)
+    driver.find_element_by_xpath("//div[@id = 'contabil-section']//*[text() = '2010']").click()
+    time.sleep(4)
+    html_content_resultado = encontrarElementoXpathOutHtml("//div[@id = 'contabil-section']//div[@class = 'DRE table-info card card-panel white mb-5']")
+
+    soup_resultado = BeautifulSoup(html_content_resultado, 'html.parser')
+    #print(soup_resultado.get_text())
+    table = soup_resultado.find(name='table')
+    df_resultado = pd.read_html(str(table))[0]
+
+    exportarCsv(df_resultado,'DF_Resultado_%s.csv' % (acao[i]))
+
+    # ------------------------------------------encontrar elemento Fluxo de Caixa -------------------------------------
+
+    html_content_fluxo = encontrarElementoXpathOutHtml("//div[@aria-label = 'Grid com o fluxo de caixa']")
+
+    soup_resultado = BeautifulSoup(html_content_fluxo, 'html.parser')
+    #print(soup_resultado.get_text())
+    table = soup_resultado.find(name='table')
+    df_fluxo = pd.read_html(str(table))[0]
+
+    exportarCsv(df_fluxo,'DF_Fluxo_%s.csv' % (acao[i]))
+
+    # ------------------------------------------encontrar elemento Balanço Patrimonial -------------------------------------
+
+    html_content_balanco = encontrarElementoXpathOutHtml("//div[ @class = 'BS table-info card-panel mb-0']")
+
+    soup_balanco = BeautifulSoup(html_content_balanco, 'html.parser')
+    #print(soup_resultado.get_text())
+    table = soup_balanco.find(name='table')
+    df_balanco = pd.read_html(str(table))[0]
+
+    exportarCsv(df_balanco,'DF_Balanco_%s.csv' % (acao[i]))
+
+    # ------------------------------------------encontrar elemento Indicadores/ Parsear com BeautifulSoup -------------------------------------
+    html_content = encontrarElementoXpathOutHtml("//div[@class= 'top-info m-0 width-auto text-left info-5 sm d-flex justify-between ov-hidden']")
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # ------------------------------------------Estruturar Data Frame de indicadores:------------------------------------------
+    if i == 0:
+        tit_values = encontrarAllElementsComecandoParaEstruturarDf(soup, '^title m-0')
+        df = estruturarDF(i, tit_values)
+
+    print(df)
+    #------------------------------------------Preencher Data Frame: ------------------------------------------
+    values = encontrarAllElementsParaPreencherDf(soup, 'value')
+    print(values)
+    df = preencherDF(values)
+
+    # ------------------------------------------cotação ação: ------------------------------------------
+    option = Options()
+    option.headless = True
+    driveryahoo = webdriver.Chrome()
+    urlyahoo = "https://finance.yahoo.com/quote/%s.SA/history?period1=946857600&period2=1589068800&interval=1d&filter=history&frequency=1d" % (acao[i])
+    driveryahoo.get(urlyahoo)
+    time.sleep(4)
+
+    wait = WebDriverWait(driveryahoo, 10)
+    element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text() ='Download']")))
+    element = driveryahoo.find_element_by_xpath("//span[text() ='Download']")
+    driveryahoo.execute_script("return arguments[0].scrollIntoView();", element)
+    driveryahoo.execute_script("window.scrollBy(0, -150);")
+    driveryahoo.find_element_by_xpath("//span[text() ='Download']//../..").click()
+    time.sleep(4)
+    driveryahoo.quit()
+#------------------------------------------Exportar------------------------------------------
+df['papel'] = acao
+exportarCsv(df,'DF_Indicadores.csv')
+driver.quit()
+
